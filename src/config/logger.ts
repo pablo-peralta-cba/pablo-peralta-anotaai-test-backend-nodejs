@@ -9,9 +9,6 @@ const logger = winston.createLogger({
   ),
   transports: [
     new winston.transports.Console(), // Log to the console
-    // You can add more transports like logging to a file:
-    // new winston.transports.File({ filename: 'combined.log' }),
-    // new winston.transports.File({ filename: 'errors.log', level: 'error' }),
   ],
 });
 
