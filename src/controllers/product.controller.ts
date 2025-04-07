@@ -24,6 +24,7 @@ export interface UpdateProductCategoryRequest {
   categoryId: string;
 }
 
+
 export const createProduct = async (req: Request<{}, {}, CreateProductRequest>, res: Response) => {
   try {
     const { title, description, price, ownerId, category } = req.body;
@@ -31,6 +32,11 @@ export const createProduct = async (req: Request<{}, {}, CreateProductRequest>, 
     res.status(201).json(product);
   } catch (error: any) {
     console.error('Error creating product:', error);
+    if (error.message === 'Category not found.') {
+      return res.status(400).json({ message: error.message });
+    } else if (error.message === 'Category does not belong to the same owner.') {
+      return res.status(400).json({ message: error.message });
+    }
     res.status(500).json({ message: error.message || 'Could not create product' });
   }
 };
@@ -43,14 +49,16 @@ export const updateProduct = async (
   try {
     const { productId } = req.params;
     const updateData: UpdateProductDTO = req.body;
+    const requestingOwnerId = req.body.ownerId;
 
-    // Validate that there is something to update (optional, but good practice)
+    if (!requestingOwnerId) {
+      return res.status(401).json({ message: 'Unauthorized: Owner ID required for update.' });
+    }
     if (Object.keys(updateData).length === 0) {
       return res.status(400).json({ message: 'No data provided for update' });
     }
 
-    // Update the product, including potentially the category
-    const updatedProduct = await ProductService.updateProduct(productId, updateData);
+    const updatedProduct = await ProductService.updateProduct(productId, updateData, requestingOwnerId);
 
     if (!updatedProduct) {
       return res.status(404).json({ message: 'Product not found' });
@@ -60,27 +68,44 @@ export const updateProduct = async (
 
   } catch (error: any) {
     console.error('Error updating product:', error);
+    if (error.message === 'Product not found.' || error.message === 'New category not found.') {
+      return res.status(404).json({ message: error.message });
+    } else if (error.message === 'You do not have permission to update this product.' || error.message === 'New category does not belong to the same owner.') {
+      return res.status(403).json({ message: error.message });
+    }
     return res.status(500).json({ message: error.message || 'Could not update product' });
   }
 };
 
-export const deleteProduct = async (req: Request<{ productId: string }>, res: Response) => {
+
+export const deleteProduct = async (req: Request<{ productId: string }, {}, { ownerId?: string }>, res: Response) => {
   try {
     const { productId } = req.params;
-    const deletedProduct = await ProductService.deleteProduct(productId);
+    const requestingOwnerId = req.body.ownerId;
+
+    if (!requestingOwnerId) {
+      return res.status(401).json({ message: 'Unauthorized: Owner ID required to delete.' });
+    }
+
+    const deletedProduct = await ProductService.deleteProduct(productId, requestingOwnerId);
     if (!deletedProduct) {
       return res.status(404).json({ message: 'Product not found' });
     }
-    res.status(204).send(); // 204 No Content
+    res.status(204).send();
   } catch (error: any) {
     console.error('Error deleting product:', error);
+    if (error.message === 'Product not found.') {
+      return res.status(404).json({ message: error.message });
+    } else if (error.message === 'You do not have permission to delete this product.') {
+      return res.status(403).json({ message: error.message });
+    }
     res.status(500).json({ message: error.message || 'Could not delete product' });
   }
 };
 
 
 
-// Example: Get a single product by ID
+// Get a single product by ID
 export const getProductById = async (req: Request<{ productId: string }>, res: Response) => {
   try {
     const { productId } = req.params;

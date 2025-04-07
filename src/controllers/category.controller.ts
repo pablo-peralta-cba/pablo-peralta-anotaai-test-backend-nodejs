@@ -19,27 +19,51 @@ export const updateCategory = async (req: Request<{ categoryId: string }, {}, Up
   try {
     const { categoryId } = req.params;
     const updateData = req.body;
-    const updatedCategory = await CategoryService.updateCategory(categoryId, updateData);
+    const requestingOwnerId = req.body.ownerId;
+
+    if (!requestingOwnerId) {
+      return res.status(401).json({ message: 'Unauthorized: Owner ID required for update.' });
+    }
+
+    const updatedCategory = await CategoryService.updateCategory(categoryId, updateData, requestingOwnerId);
     if (!updatedCategory) {
       return res.status(404).json({ message: 'Category not found' });
     }
     res.json(updatedCategory);
   } catch (error: any) {
     console.error('Error updating category:', error);
+    if (error.message === 'Category not found.') {
+      return res.status(404).json({ message: error.message });
+    } else if (error.message === 'You do not have permission to update this category.') {
+      return res.status(403).json({ message: error.message });
+    }
     res.status(500).json({ message: error.message || 'Could not update category' });
   }
 };
 
-export const deleteCategory = async (req: Request<{ categoryId: string }>, res: Response) => {
+
+
+export const deleteCategory = async (req: Request<{ categoryId: string }, {}, { ownerId?: string }>, res: Response) => {
   try {
     const { categoryId } = req.params;
-    const deletedCategory = await CategoryService.deleteCategory(categoryId);
+    const requestingOwnerId = req.body.ownerId; // Insecure - replace with auth later
+
+    if (!requestingOwnerId) {
+      return res.status(401).json({ message: 'Unauthorized: Owner ID required to delete.' });
+    }
+
+    const deletedCategory = await CategoryService.deleteCategory(categoryId, requestingOwnerId);
     if (!deletedCategory) {
       return res.status(404).json({ message: 'Category not found' });
     }
     res.status(204).send(); // 204 No Content
   } catch (error: any) {
     console.error('Error deleting category:', error);
+    if (error.message === 'Category not found.') {
+      return res.status(404).json({ message: error.message });
+    } else if (error.message === 'You do not have permission to delete this category.') {
+      return res.status(403).json({ message: error.message });
+    }
     res.status(500).json({ message: error.message || 'Could not delete category' });
   }
 };
@@ -67,3 +91,4 @@ export const getAllCategories = async (req: Request, res: Response) => {
     res.status(500).json({ message: error.message || 'Could not get categories' });
   }
 };
+

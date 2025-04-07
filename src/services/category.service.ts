@@ -1,87 +1,3 @@
-// import Category, { CategoryDocument } from '../models/category.model';
-// import { sendMessageToSQS } from './aws/sqs.service';
-
-
-// // Define types for request bodies
-// export interface CreateCategoryRequest {
-//   title: string;
-//   description?: string;
-//   ownerId?: string;
-// }
-
-// export interface UpdateCategoryRequest {
-//   title?: string;
-//   description?: string;
-//   ownerId?: string;
-// }
-
-// export const createCategory = async (categoryData: CreateCategoryRequest): Promise<CategoryDocument> => {
-//   try {
-//     const category = new Category(categoryData);
-//     const savedCategory = await category.save();
-//     if (savedCategory) {
-//       await sendMessageToSQS({ entityType: 'category', entityId: savedCategory.id, ownerId: savedCategory.ownerId });
-//     }
-//     return savedCategory;
-//   } catch (error: any) {
-//     console.error('Error creating category in service:', error);
-//     throw error;
-//   }
-// };
-
-// export const updateCategory = async (
-//   categoryId: string,
-//   updateData: UpdateCategoryRequest
-// ): Promise<CategoryDocument | null> => {
-//   try {
-//     const existingCategory = await Category.findById(categoryId);
-//     if (!existingCategory) {
-//       return null;
-//     }
-
-//     const updatedCategory = await Category.findByIdAndUpdate(categoryId, updateData, { new: true });
-//     if (updatedCategory) {
-//       await sendMessageToSQS({ entityType: 'category', entityId: updatedCategory.id, ownerId: updatedCategory.ownerId });
-//     }
-//     return updatedCategory;
-//   } catch (error: any) {
-//     console.error('Error updating category in service:', error);
-//     throw error;
-//   }
-// };
-
-// export const deleteCategory = async (categoryId: string): Promise<CategoryDocument | null> => {
-//   try {
-//     const deletedCategory = await Category.findByIdAndDelete(categoryId);
-//     if (deletedCategory) {
-//       await sendMessageToSQS({ entityType: 'category', entityId: deletedCategory.id, ownerId: deletedCategory.ownerId });
-//     }
-//     return deletedCategory;
-//   } catch (error: any) {
-//     console.error('Error deleting category in service:', error);
-//     throw error;
-//   }
-// };
-
-// export const getCategoryById = async (categoryId: string): Promise<CategoryDocument | null> => {
-//   try {
-//     return await Category.findById(categoryId);
-//   } catch (error: any) {
-//     console.error('Error getting category by ID in service:', error);
-//     throw error;
-//   }
-// };
-
-// export const getAllCategories = async (ownerId?: string): Promise<CategoryDocument[]> => {
-//   try {
-//     const query = ownerId ? { ownerId: ownerId } : {}; // If ownerId is provided, filter by it
-//     return await Category.find(query);
-//   } catch (error: any) {
-//     console.error('Error getting all categories in service:', error);
-//     throw error;
-//   }
-// };
-
 
 import Category, { CategoryDocument } from '../models/category.model';
 import Product from '../models/product.model';
@@ -121,16 +37,20 @@ export const createCategory = async (categoryData: CreateCategoryRequest): Promi
 
 export const updateCategory = async (
   categoryId: string,
-  updateData: UpdateCategoryRequest
+  updateData: UpdateCategoryRequest,
+  requestingOwnerId: string
 ): Promise<CategoryDocument | null> => {
   try {
-    logger.info(`Updating category with ID: ${categoryId}`);
+    logger.info(`Updating category with ID: ${categoryId} by owner: ${requestingOwnerId}`);
     const existingCategory = await Category.findById(categoryId);
     if (!existingCategory) {
       logger.warn(`Category with ID: ${categoryId} not found.`);
       return null;
     }
-
+// Verify ownership
+if (existingCategory.ownerId !== requestingOwnerId) {
+  throw new Error('You do not have permission to update this category.');
+} 
     const updatedCategory = await Category.findByIdAndUpdate(categoryId, updateData, { new: true });
     if (updatedCategory) {
       logger.info(`Category updated successfully: ${updatedCategory.id}`);
@@ -144,9 +64,22 @@ export const updateCategory = async (
   }
 };
 
-export const deleteCategory = async (categoryId: string): Promise<CategoryDocument | null> => {
+
+
+export const deleteCategory = async (categoryId: string, requestingOwnerId: string): Promise<CategoryDocument | null> => {
   try {
-    logger.info(`Deleting category with ID: ${categoryId}`);
+    logger.info(`Deleting category with ID: ${categoryId} by owner: ${requestingOwnerId}`);
+
+    const existingCategory = await Category.findById(categoryId);
+    if (!existingCategory) {
+      logger.warn(`Category with ID: ${categoryId} not found for deletion.`);
+      return null;
+    }
+
+    // Verify ownership before allowing deletion
+    if (existingCategory.ownerId !== requestingOwnerId) {
+      throw new Error('You do not have permission to delete this category.');
+    }
 
     // Find all products associated with this category
     logger.info(`Finding products associated with category ID: ${categoryId}`);
@@ -170,8 +103,6 @@ export const deleteCategory = async (categoryId: string): Promise<CategoryDocume
         ownerId: deletedCategory.ownerId,
       });
       logger.info(`SQS message sent for category deletion: ${deletedCategory.id}`);
-    } else {
-      logger.warn(`Category with ID: ${categoryId} not found for deletion.`);
     }
     return deletedCategory;
   } catch (error: any) {
@@ -202,3 +133,4 @@ export const getAllCategories = async (ownerId?: string): Promise<CategoryDocume
     throw error;
   }
 };
+

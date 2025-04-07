@@ -12,6 +12,7 @@ const router = express.Router();
 
 // Create a new category
 router.post('/categories', async (req: Request<{}, {}, CreateCategoryRequest>, res: Response) => { 
+  await CategoryController.createCategory(req, res);
 });
 
 // Update an existing category
